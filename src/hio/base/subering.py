@@ -1023,7 +1023,6 @@ class Subery(Duror):
     """Subery subclass of Duror for managing subdbs of Duror for durable storage
     of action data
     """
-    SubDbNames = ("cans.", "drqs.", "dsqs.")
 
     def __init__(self, **kwa):
         """
@@ -1047,7 +1046,7 @@ class Subery(Duror):
 
             """
             kwa.pop("stores", None)
-            await super(Subery, self).reopen(stores=self.SubDbNames, **kwa)
+            await super(Subery, self).reopen(stores=("cans.", "drqs.", "dsqs."), **kwa)
             self.cans = DomSuber(db=self, subkey='cans.')
             self.drqs = DomIoSuber(db=self, subkey="drqs.")  # durable queue
             self.dsqs = DomIoSetSuber(db=self, subkey="dsqs.")  # durable set queue
