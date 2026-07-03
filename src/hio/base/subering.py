@@ -5,8 +5,7 @@ Support for Durable storage abstracted subclasses  (lmdb or wasm pyodide Indexed
 """
 
 import sys
-
-from ordered_set import OrderedSet as oset
+from collections.abc import Iterable
 
 from hio import HierError
 from ..help import isNonStringIterable, RegDom, IceRegDom
@@ -30,7 +29,7 @@ class SuberBase():
         Sep (str): default separator to convert keys iterator to key bytes for db key
 
     Attributes:
-        db (dbing.LMDBer): base LMDB db
+        db (Duror): base LMDB db
         sdb (lmdb._Database): instance of lmdb named sub db for this Suber
         sep (str): separator for combining keys tuple of strs into key bytes
         verify (bool): True means reverify when ._des from db when applicable
@@ -45,7 +44,7 @@ class SuberBase():
                        verify: bool=False,
                        **kwa):
         """Parameters:
-            db (dbing.LMDBer): base db
+            db (Duror): base db
             subkey (str):  LMDB sub database key
             dupsort (bool): True means enable duplicates at each key
                                False (default) means do not enable duplicates at
@@ -267,7 +266,7 @@ class Suber(SuberBase):
                        dupsort: bool=False, **kwa):
         """
         Inherited Parameters:
-            db (dbing.LMDBer): base db
+            db (Duror): base db
             subkey (str):  LMDB sub database key
             dupsort (bool): True means enable duplicates at each key
                                False (default) means do not enable duplicates at
@@ -278,7 +277,7 @@ class Suber(SuberBase):
                            False means do not reverify. Default False
 
         Parameters:
-            db (dbing.LMDBer): base db
+            db (Duror): base db
             subkey (str):  LMDB sub database key
         """
         super(Suber, self).__init__(db=db, subkey=subkey, dupsort=False, **kwa)
@@ -367,14 +366,14 @@ class IoSuber(SuberBase):
     """
     IonSep = '.'  # separator for suffixing insertion order ordinal number
 
-    def __init__(self, db: dbing.LMDBer, *,
+    def __init__(self, db: Duror, *,
                        subkey: str='docs.',
                        dupsort: bool=False,
                        ionsep: str=None, **kwa):
         """Initialize instance
 
         Inherited Parameters:
-            db (dbing.LMDBer): base db
+            db (Duror): base db
             subkey (str):  LMDB sub database key
             dupsort (bool): True means enable duplicates at each key
                                False (default) means do not enable duplicates at
@@ -617,14 +616,14 @@ class IoSetSuber(SuberBase):
     """
     IonSep = '.'  # separator for suffixing insertion order ordinal number
 
-    def __init__(self, db: dbing.LMDBer, *,
+    def __init__(self, db: Duror, *,
                        subkey: str='docs.',
                        dupsort: bool=False,
                        ionsep: str=None, **kwa):
         """Initialize instance
 
         Inherited Parameters:
-            db (dbing.LMDBer): base db
+            db (Duror): base db
             subkey (str):  LMDB sub database key
             dupsort (bool): True means enable duplicates at each key
                                False (default) means do not enable duplicates at
@@ -1024,6 +1023,8 @@ class Subery(Duror):
     """Subery subclass of Duror for managing subdbs of Duror for durable storage
     of action data
     """
+    SubDbNames = ("cans.", "drqs.", "dsqs.")
+
     def __init__(self, **kwa):
         """
         Setup named sub databases.
@@ -1032,24 +1033,43 @@ class Subery(Duror):
         """
         super(Subery, self).__init__(**kwa)
 
+    if PYODIDE:
+        async def reopen(self, **kwa):
+            """Open sub databases
 
-    def reopen(self, **kwa):
-        """Open sub databases
+            Attributes:
+                cans (Suber): subdb whose values are serialized Can instances
+                    Can is a durable Bag
+                drqs (IoSetSub): subdb whose values are serialized RegDom instances
+                    Interfaced via a Durq which is a durable queue (FIFO)
+                dsqs (IoSetSub): subdb whose values are serialized RegDom instances
+                    Interfaced via a Dusq which is  durable set queue (FIFO deduped)
 
-        Attributes:
-            cans (Suber): subdb whose values are serialized Can instances
-                Can is a durable Bag
-            drqs (IoSetSub): subdb whose values are serialized RegDom instances
-                Interfaced via a Durq which is a durable queue (FIFO)
-            dsqs (IoSetSub): subdb whose values are serialized RegDom instances
-                Interfaced via a Dusq which is  durable set queue (FIFO deduped)
+            """
+            kwa.pop("stores", None)
+            await super(Subery, self).reopen(stores=self.SubDbNames, **kwa)
+            self.cans = DomSuber(db=self, subkey='cans.')
+            self.drqs = DomIoSuber(db=self, subkey="drqs.")  # durable queue
+            self.dsqs = DomIoSetSuber(db=self, subkey="dsqs.")  # durable set queue
 
-        """
-        super(Subery, self).reopen(**kwa)
+            return self.env
 
-        self.cans = DomSuber(db=self, subkey='cans.')
-        self.drqs = DomIoSuber(db=self, subkey="drqs.")  # durable queue
-        self.dsqs = DomIoSetSuber(db=self, subkey="dsqs.")  # durable set queue
+    else:
+        def reopen(self, **kwa):
+            """Open sub databases
 
-        return self.env
+            Attributes:
+                cans (Suber): subdb whose values are serialized Can instances
+                    Can is a durable Bag
+                drqs (IoSetSub): subdb whose values are serialized RegDom instances
+                    Interfaced via a Durq which is a durable queue (FIFO)
+                dsqs (IoSetSub): subdb whose values are serialized RegDom instances
+                    Interfaced via a Dusq which is  durable set queue (FIFO deduped)
 
+            """
+            super(Subery, self).reopen(**kwa)
+            self.cans = DomSuber(db=self, subkey='cans.')
+            self.drqs = DomIoSuber(db=self, subkey="drqs.")  # durable queue
+            self.dsqs = DomIoSetSuber(db=self, subkey="dsqs.")  # durable set queue
+
+            return self.env
